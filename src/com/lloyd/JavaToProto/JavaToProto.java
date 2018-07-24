@@ -62,8 +62,6 @@ public class JavaToProto {
 	private static String COMMENT = "//";
 	private static String SPACE = " ";
 	private static String PATH_SEPERATOR = ".";
-	private static String OPTIONAL = "optional";
-	private static String REQUIRED = "required";
 	private static String REPEATED = "repeated";
 	private static String LINE_END = ";";
 
@@ -195,7 +193,11 @@ public class JavaToProto {
 		return results;
 	}
 	
-	public void processField(String repeated, String type, String name, int index){
+	public void processField(String type, String name, int index){
+		builder.append(getTabs()).append(type).append(SPACE).append(name).append(SPACE).append("=").append(SPACE).append(index).append(LINE_END).append(NEWLINE);
+	}
+	
+	public void processRepeatedField(String repeated, String type, String name, int index){
 		builder.append(getTabs()).append(repeated).append(SPACE).append(type).append(SPACE).append(name).append(SPACE).append("=").append(SPACE).append(index).append(LINE_END).append(NEWLINE);
 	}
 	
@@ -242,13 +244,13 @@ public class JavaToProto {
 			
 			//Primitives or Types we have come across before
 			if(typeMap.containsKey(fieldType)){
-				processField(OPTIONAL,typeMap.get(fieldType), f.getName(), i);
+				processField(typeMap.get(fieldType), f.getName(), i);
 				continue;
 			}
 			
 			if(fieldType.isEnum()){
 				processEnum(fieldType);
-				processField(OPTIONAL,typeMap.get(fieldType), f.getName(), i);
+				processField(typeMap.get(fieldType), f.getName(), i);
 				continue;
 			}
 			
@@ -266,7 +268,7 @@ public class JavaToProto {
 					buildEntryType(entryName, innerType, innerType2);
 				}
 				
-				processField(REPEATED,entryName, f.getName(), i);
+				processRepeatedField(REPEATED,entryName, f.getName(), i);
 				continue;
 			}
 			
@@ -275,7 +277,7 @@ public class JavaToProto {
 				if(!typeMap.containsKey(innerType)){
 					buildNestedType(innerType);
 				}
-				processField(REPEATED,typeMap.get(fieldType), f.getName(), i);
+				processRepeatedField(REPEATED,typeMap.get(fieldType), f.getName(), i);
 				continue;
 			}
 			
@@ -292,14 +294,14 @@ public class JavaToProto {
 				if(!typeMap.containsKey(innerType)){
 					buildNestedType(innerType);
 				}
-				processField(REPEATED,typeMap.get(fieldType), f.getName(), i);
+				processRepeatedField(REPEATED,typeMap.get(fieldType), f.getName(), i);
 				continue;
 			}
 			
 			//Ok so not a primitive / scalar, not a map or collection, and we havnt already processed it
 			//So it must be another pojo
 			buildNestedType(fieldType);
-			processField(REPEATED,typeMap.get(fieldType), f.getName(), i);
+			processRepeatedField(REPEATED,typeMap.get(fieldType), f.getName(), i);
 		}
 	}
 	
@@ -322,14 +324,14 @@ public class JavaToProto {
 			typeMap.remove(innerType);
 			typeMap.put(innerType, getPath()+PATH_SEPERATOR+name+PATH_SEPERATOR+innerType.getSimpleName());
 		}
-		processField(REQUIRED,typeMap.get(innerType), "key", 1);
+		processField(typeMap.get(innerType), "key", 1);
 		
 		if(!typeMap.containsKey(innerType2)){
 			buildNestedType(innerType2);
 			typeMap.remove(innerType2);
 			typeMap.put(innerType2, getPath()+PATH_SEPERATOR+name+PATH_SEPERATOR+innerType2.getSimpleName());
 		}
-		processField(REQUIRED,typeMap.get(innerType2), "value", 2);
+		processField(typeMap.get(innerType2), "value", 2);
 		
 		tabDepth--;
 		
