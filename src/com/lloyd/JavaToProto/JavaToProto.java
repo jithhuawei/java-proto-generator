@@ -4,12 +4,16 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.lang.reflect.Parameter;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Stack;
 
@@ -183,11 +187,13 @@ public class JavaToProto {
 		results.put(int.class, "sint32");
 		results.put(long.class, "sint64");
 		results.put(boolean.class, "bool");
+		results.put(byte.class, "byte");
 		results.put(Double.class, "double");
 		results.put(Float.class, "float");
 		results.put(Integer.class, "sint32");
 		results.put(Long.class, "sint64");
 		results.put(Boolean.class, "bool");
+		results.put(Byte.class, "byte");
 		results.put(String.class, "string");
 		
 		return results;
@@ -226,6 +232,46 @@ public class JavaToProto {
 		return messageName;		
 	}
 	
+    private void buildClassMethod() {
+        builder.append(NEWLINE);
+        String messageName = currentClass().getSimpleName();
+        Method[] methods = currentClass().getDeclaredMethods();
+
+        for (Method m : methods) {
+            Class<?>[] paramType = m.getParameterTypes();
+
+            // Need to create protobuf definitions only for class methods with parameters.
+            if (paramType.length == 0) {
+                continue;
+            }
+
+            builder.append(getTabs())
+                    .append(MESSAGE)
+                    .append(SPACE)
+                    .append(m.getName())
+                    .append(OPEN_BLOCK)
+                    .append(NEWLINE);
+
+            tabDepth++;
+
+            Parameter[] parameters = m.getParameters();
+            List<String> paramNames = new ArrayList<String>();
+            for (Parameter param : parameters) {
+                paramNames.add(param.getName());
+            }
+
+            for (int i = 0; i < paramType.length; i++) {
+                if (typeMap.get(paramType[i]) != null) {
+                    processField(typeMap.get(paramType[i]), paramNames.get(i), i+1);
+                } else {
+                    processField(paramType[i].getTypeName(), paramNames.get(i), i+1);
+                }
+            }
+
+            tabDepth--;
+            builder.append(getTabs()).append(CLOSE_BLOCK).append(NEWLINE);
+        }
+    }
 	private void processFields(){
 		Field[] fields = currentClass().getDeclaredFields();
 		
@@ -383,6 +429,7 @@ public class JavaToProto {
         addPackage();
 
         buildMessage();
+        buildClassMethod();
     }
 	@Override
 	/**
