@@ -327,6 +327,21 @@ public class JavaToProto {
 				continue;
 			}
 			
+            // Check for List
+            if (fieldType.equals(List.class)) {
+                Type type = f.getGenericType();
+                Class listParamType = null;
+                if (type instanceof ParameterizedType) {
+                    ParameterizedType pt = (ParameterizedType) type;
+                    listParamType = (Class) pt.getActualTypeArguments()[0];
+                }
+                if (!typeMap.containsKey(listParamType)) {
+                    buildNestedType(listParamType);
+                }
+                processRepeatedField(REPEATED, listParamType.getSimpleName(), f.getName(), i);
+                continue;
+            }
+
 			if(Collection.class.isAssignableFrom(fieldType)){
 				Class innerType = null;
 				
