@@ -187,13 +187,13 @@ public class JavaToProto {
 		results.put(int.class, "sint32");
 		results.put(long.class, "sint64");
 		results.put(boolean.class, "bool");
-		results.put(byte.class, "byte");
+		results.put(byte.class, "bytes");
 		results.put(Double.class, "double");
 		results.put(Float.class, "float");
 		results.put(Integer.class, "sint32");
 		results.put(Long.class, "sint64");
 		results.put(Boolean.class, "bool");
-		results.put(Byte.class, "byte");
+		results.put(Byte.class, "bytes");
 		results.put(String.class, "string");
 		
 		return results;
@@ -261,9 +261,21 @@ public class JavaToProto {
             }
 
             for (int i = 0; i < paramType.length; i++) {
+                // Check whether Method Parameter is available in the typeMap.
                 if (typeMap.get(paramType[i]) != null) {
                     processField(typeMap.get(paramType[i]), paramNames.get(i), i+1);
-                } else {
+                }
+                // Check whether Method Parameter is an array.
+                else if (paramType[i].isArray()) {
+                        Class innerType = paramType[i].getComponentType();
+                        if (!typeMap.containsKey(innerType)) {
+                            buildNestedType(innerType);
+                        }
+                        processRepeatedField(REPEATED, typeMap.get(innerType), paramNames.get(i), i + 1);
+                        continue;
+                }
+                // Handle unknown Method Parameters.
+                else {
                     processField(paramType[i].getTypeName(), paramNames.get(i), i+1);
                 }
             }
@@ -303,7 +315,7 @@ public class JavaToProto {
 			if(Map.class.isAssignableFrom(fieldType)){
 				Class innerType = null;
 				Class innerType2 = null;
-				String entryName = "Entry_"+f.getName();
+				String entryName = "Map_" + f.getName();
 				
 				Type t = f.getGenericType();
 				
@@ -323,7 +335,7 @@ public class JavaToProto {
 				if(!typeMap.containsKey(innerType)){
 					buildNestedType(innerType);
 				}
-				processRepeatedField(REPEATED,typeMap.get(fieldType), f.getName(), i);
+				processRepeatedField(REPEATED, typeMap.get(innerType), f.getName(), i);
 				continue;
 			}
 			
@@ -338,7 +350,7 @@ public class JavaToProto {
                 if (!typeMap.containsKey(listParamType)) {
                     buildNestedType(listParamType);
                 }
-                processRepeatedField(REPEATED, listParamType.getSimpleName(), f.getName(), i);
+                processRepeatedField(REPEATED, typeMap.get(listParamType), f.getName(), i);
                 continue;
             }
 
