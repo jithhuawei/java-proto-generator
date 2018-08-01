@@ -55,7 +55,7 @@ import java.util.Stack;
 public class JavaToProto {
 	
 	private static String NAME = "JavaToProto Generator";
-	private static String VERSION = "v0.1";
+    private static String VERSION = "v0.2";
 	
 	private static String OPEN_BLOCK = "{";
 	private static String CLOSE_BLOCK = "}";
@@ -82,6 +82,8 @@ public class JavaToProto {
 	private Stack<Class> classStack = new Stack<Class>();
 	private Map<Class, String> typeMap = getPrimitivesMap();
 	private int tabDepth = 0;
+    private Stack<Class> fieldStack = new Stack<Class>();
+    private static Class origClass;
 
 	/**
 	 * Entry Point for the CLI Interface to this Program.
@@ -90,13 +92,15 @@ public class JavaToProto {
 	public static void main(String[] args) {
 		
 		if(args.length == 0){
-			System.out.println("Usage: \n\tjava -jar JavaToProto.jar JavaToProto <class name> [<output file name>]\n");
+            System.out.println(
+                    "Usage: \n\tjava -jar JavaToProto.jar JavaToProto <class name> [<output file name>]\n");
 		}
 		
 		Class clazz;
 		
 		try {
 			clazz = Class.forName(args[0]);
+            origClass = clazz;
 		} catch (Exception e) {
 			System.out.println("Could not load class. Make Sure it is in the classpath!!");
 			e.printStackTrace();
@@ -118,7 +122,8 @@ public class JavaToProto {
 				out.flush();
 				out.close();
 			} catch (Exception e) {
-				System.out.println("Got Exception while Writing to File - See Console for File Contents");
+                System.out.println(
+                        "Got Exception while Writing to File - See Console for File Contents");
 				System.out.println(protoFile);
 				e.printStackTrace();
 			}
@@ -136,7 +141,8 @@ public class JavaToProto {
 	 */
 	public JavaToProto(Class classToProcess){
 		if(classToProcess == null){
-			throw new RuntimeException("You gave me a null class to process. This cannot be done, please pass in an instance of Class");
+            throw new RuntimeException(
+                    "You gave me a null class to process. This cannot be done, please pass in an instance of Class");
 		}
 		classStack.push(classToProcess);
 	}
@@ -200,11 +206,31 @@ public class JavaToProto {
 	}
 	
 	public void processField(String type, String name, int index){
-		builder.append(getTabs()).append(type).append(SPACE).append(name).append(SPACE).append("=").append(SPACE).append(index).append(LINE_END).append(NEWLINE);
+        builder.append(getTabs())
+                .append(type)
+                .append(SPACE)
+                .append(name)
+                .append(SPACE)
+                .append("=")
+                .append(SPACE)
+                .append(index)
+                .append(LINE_END)
+                .append(NEWLINE);
 	}
 	
 	public void processRepeatedField(String repeated, String type, String name, int index){
-		builder.append(getTabs()).append(repeated).append(SPACE).append(type).append(SPACE).append(name).append(SPACE).append("=").append(SPACE).append(index).append(LINE_END).append(NEWLINE);
+        builder.append(getTabs())
+                .append(repeated)
+                .append(SPACE)
+                .append(type)
+                .append(SPACE)
+                .append(name)
+                .append(SPACE)
+                .append("=")
+                .append(SPACE)
+                .append(index)
+                .append(LINE_END)
+                .append(NEWLINE);
 	}
 	
 	//end region
@@ -219,15 +245,18 @@ public class JavaToProto {
 		
 		typeMap.put(currentClass(), getPath());
 		
-		builder.append(getTabs()).append(MESSAGE).append(SPACE).append(messageName).append(OPEN_BLOCK).append(NEWLINE);
+        builder.append(getTabs())
+                .append(MESSAGE)
+                .append(SPACE)
+                .append(messageName)
+                .append(OPEN_BLOCK)
+                .append(NEWLINE);
 		
 		tabDepth++;
 		
 		processFields();
 		
 		tabDepth--;
-		
-		builder.append(getTabs()).append(CLOSE_BLOCK).append(NEWLINE);
 		
 		return messageName;		
 	}
@@ -269,7 +298,7 @@ public class JavaToProto {
                 else if (paramType[i].isArray()) {
                         Class innerType = paramType[i].getComponentType();
                         if (!typeMap.containsKey(innerType)) {
-                            buildNestedType(innerType);
+                            fieldStack.push(innerType);
                         }
                         processRepeatedField(REPEATED, typeMap.get(innerType), paramNames.get(i), i + 1);
                         continue;
@@ -306,13 +335,13 @@ public class JavaToProto {
 				continue;
 			}
 			
-			if(fieldType.isEnum()){
+            else if (fieldType.isEnum()) {
 				processEnum(fieldType);
 				processField(typeMap.get(fieldType), f.getName(), i);
 				continue;
 			}
 			
-			if(Map.class.isAssignableFrom(fieldType)){
+            else if (Map.class.isAssignableFrom(fieldType)) {
 				Class innerType = null;
 				Class innerType2 = null;
 				String entryName = "Map_" + f.getName();
@@ -330,31 +359,36 @@ public class JavaToProto {
 				continue;
 			}
 			
-			if(fieldType.isArray()){
+            else if (fieldType.isArray()) {
 				Class innerType = fieldType.getComponentType();
 				if(!typeMap.containsKey(innerType)){
-					buildNestedType(innerType);
+                    buildNestedType(innerType, i);
+                    fieldStack.push(innerType);
 				}
 				processRepeatedField(REPEATED, typeMap.get(innerType), f.getName(), i);
 				continue;
 			}
 			
             // Check for List
-            if (fieldType.equals(List.class)) {
+            else if (fieldType.equals(List.class)) {
                 Type type = f.getGenericType();
                 Class listParamType = null;
                 if (type instanceof ParameterizedType) {
                     ParameterizedType pt = (ParameterizedType) type;
                     listParamType = (Class) pt.getActualTypeArguments()[0];
                 }
+                // Check whether the List parameter is a primitive type or User-defined type.
                 if (!typeMap.containsKey(listParamType)) {
-                    buildNestedType(listParamType);
+                    fieldStack.push(listParamType);
+                    processRepeatedField(REPEATED, listParamType.getSimpleName(), f.getName(), i);
                 }
+                else {
                 processRepeatedField(REPEATED, typeMap.get(listParamType), f.getName(), i);
+                }
                 continue;
             }
 
-			if(Collection.class.isAssignableFrom(fieldType)){
+            else if (Collection.class.isAssignableFrom(fieldType)) {
 				Class innerType = null;
 				
 				Type t = f.getGenericType();
@@ -365,46 +399,74 @@ public class JavaToProto {
 				}
 				
 				if(!typeMap.containsKey(innerType)){
-					buildNestedType(innerType);
+                    buildNestedType(innerType, i);
+                    fieldStack.push(innerType);
 				}
 				processRepeatedField(REPEATED,typeMap.get(fieldType), f.getName(), i);
 				continue;
 			}
 			
-			//Ok so not a primitive / scalar, not a map or collection, and we havnt already processed it
-			//So it must be another pojo
-			buildNestedType(fieldType);
-			processRepeatedField(REPEATED,typeMap.get(fieldType), f.getName(), i);
+            // Ok so not a primitive / scalar, not a map or collection, and we havnt already
+            // processed it
+            else{
+				//So it must be another pojo
+            	buildNestedType(fieldType, i);
+                fieldStack.push(fieldType);
+                continue;
 		}
+        }
+        tabDepth--;
+        builder.append(getTabs()).append(CLOSE_BLOCK).append(NEWLINE);
+        build();
 	}
 	
-	private void buildNestedType(Class type){
-		classStack.push(type);
+    private void build() {
+		while(!fieldStack.isEmpty()) {
+			Class pop = fieldStack.pop();
+			classStack.pop();
+			classStack.push(pop);
 		buildMessage();
-		classStack.pop();
+		}
+	}
+
+	private void buildNestedType(Class type, int i) {
+        processField(type.getSimpleName(), type.getSimpleName(), i);
 	}
 	
 	private void buildEntryType(String name, Class innerType, Class innerType2) {
 	
 		typeMap.put(currentClass(), getPath());
 		
-		builder.append(getTabs()).append(MESSAGE).append(SPACE).append(name).append(OPEN_BLOCK).append(NEWLINE);
+        builder.append(getTabs())
+                .append(MESSAGE)
+                .append(SPACE)
+                .append(name)
+                .append(OPEN_BLOCK)
+                .append(NEWLINE);
 		
 		tabDepth++;
 		
 		if(!typeMap.containsKey(innerType)){
-			buildNestedType(innerType);
+            fieldStack.push(innerType);
 			typeMap.remove(innerType);
-			typeMap.put(innerType, getPath()+PATH_SEPERATOR+name+PATH_SEPERATOR+innerType.getSimpleName());
+            typeMap.put(
+                    innerType,
+                    getPath() + PATH_SEPERATOR + name + PATH_SEPERATOR + innerType.getSimpleName());
 		}
-		processField(typeMap.get(innerType), "key", 1);
+        processField(typeMap.get(innerType).substring(typeMap.get(innerType).lastIndexOf(".") + 1).trim(), "key", 1);
 		
 		if(!typeMap.containsKey(innerType2)){
-			buildNestedType(innerType2);
+            fieldStack.push(innerType2);
 			typeMap.remove(innerType2);
-			typeMap.put(innerType2, getPath()+PATH_SEPERATOR+name+PATH_SEPERATOR+innerType2.getSimpleName());
+            typeMap.put(
+                    innerType2,
+                    getPath()
+                            + PATH_SEPERATOR
+                            + name
+                            + PATH_SEPERATOR
+                            + innerType2.getSimpleName());
 		}
-		processField(typeMap.get(innerType2), "value", 2);
+        processField(typeMap.get(innerType2).substring(typeMap.get(innerType2).lastIndexOf(".") + 1).trim(), "value", 2);
 		
 		tabDepth--;
 		
@@ -417,13 +479,23 @@ public class JavaToProto {
 		typeMap.put(enumType, getPath());
 		classStack.pop();
 		
-		builder.append(getTabs()).append(ENUM).append(SPACE).append(enumType.getSimpleName()).append(OPEN_BLOCK).append(NEWLINE);
+        builder.append(getTabs())
+                .append(ENUM)
+                .append(SPACE)
+                .append(enumType.getSimpleName())
+                .append(OPEN_BLOCK)
+                .append(NEWLINE);
 		
 		tabDepth++;
 		
 		int i = 0;
 		for(Object e : enumType.getEnumConstants()){
-			builder.append(getTabs()).append(e.toString()).append(" = ").append(i).append(LINE_END).append(NEWLINE);
+            builder.append(getTabs())
+                    .append(e.toString())
+                    .append(" = ")
+                    .append(i)
+                    .append(LINE_END)
+                    .append(NEWLINE);
 		}
 		
 		tabDepth--;
@@ -431,7 +503,15 @@ public class JavaToProto {
 		builder.append(getTabs()).append(CLOSE_BLOCK).append(NEWLINE);
 	}
     private void addHeader() {
-        builder.append(COMMENT).append(SPACE).append("Generated by ").append(NAME).append(SPACE).append(VERSION).append(" on ").append(new Date()).append(NEWLINE);
+        builder.append(COMMENT)
+                .append(SPACE)
+                .append("Generated by ")
+                .append(NAME)
+                .append(SPACE)
+                .append(VERSION)
+                .append(" on ")
+                .append(new Date())
+                .append(NEWLINE);
     }
 
     private void addSyntax() {
@@ -440,11 +520,33 @@ public class JavaToProto {
     }
 
     private void addPackage() {
-        builder.append(OPTION).append(SPACE).append(JAVA_PACKAGE).append("=").append("\""+currentClass().getName()+"Proto\"").append(LINE_END).append(NEWLINE);
-        builder.append(OPTION).append(SPACE).append(OUTER_CLASS).append("=").append("\""+currentClass().getSimpleName()+"Proto\"").append(LINE_END).append(NEWLINE);
-        builder.append(OPTION).append(SPACE).append(JAVA_MULTIPLE_FILES).append("=").append(TRUE).append(LINE_END).append(NEWLINE);
+        builder.append(OPTION)
+                .append(SPACE)
+                .append(JAVA_PACKAGE)
+                .append("=")
+                .append("\"" + currentClass().getName() + "Proto\"")
+                .append(LINE_END)
+                .append(NEWLINE);
+        builder.append(OPTION)
+                .append(SPACE)
+                .append(OUTER_CLASS)
+                .append("=")
+                .append("\"" + currentClass().getSimpleName() + "Proto\"")
+                .append(LINE_END)
+                .append(NEWLINE);
+        builder.append(OPTION)
+                .append(SPACE)
+                .append(JAVA_MULTIPLE_FILES)
+                .append("=")
+                .append(TRUE)
+                .append(LINE_END)
+                .append(NEWLINE);
         builder.append(NEWLINE);
-        builder.append(PACKAGE).append(SPACE).append(currentClass().getSimpleName()+"Proto").append(LINE_END).append(NEWLINE);
+        builder.append(PACKAGE)
+                .append(SPACE)
+                .append(currentClass().getSimpleName() + "Proto")
+                .append(LINE_END)
+                .append(NEWLINE);
         builder.append(NEWLINE);
     }
 
@@ -456,6 +558,7 @@ public class JavaToProto {
         addPackage();
 
         buildMessage();
+        classStack.push(origClass);
         buildClassMethod();
     }
 	@Override
@@ -463,8 +566,7 @@ public class JavaToProto {
 	 * If the Proto file has not been generated, generate it. Then return it in string format.
 	 * @return String - a String representing the proto file representing this class.
 	 */
-	public String toString()
-	{
+    public String toString() {
 		if(builder == null){
 			generateProtoFile();
 		}
