@@ -413,7 +413,7 @@ public class JavaToProto {
             	buildNestedType(fieldType, i);
                 fieldStack.push(fieldType);
                 continue;
-		}
+		    }
         }
         tabDepth--;
         builder.append(getTabs()).append(CLOSE_BLOCK).append(NEWLINE);
